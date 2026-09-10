@@ -1,11 +1,11 @@
-# Wanderlust Stage 2 Analysis — Build 8
+# Wanderlust Stage 2 Analysis — Build 9
 
-Build 8 adds automatic Google Drive draft checkpoints, elapsed research timing, and plain-language phase indicators while preserving Build 7 PDF and email delivery.
+Build 9 prevents unchanged reopened analyses from rerunning ARV research and displays server-recorded archive timestamps, while preserving Build 8 autosave, timing, status, PDF, and email delivery.
 
 ## Components
 
 - `app/`, `components/`, and `worker/`: Cloudflare application source
-- `deployment/google-apps-script/Code.gs`: Stage 2 Apps Script backend v1.0.8
+- `deployment/google-apps-script/Code.gs`: Stage 2 Apps Script backend v1.0.9
 - `CLOUDFLARE-DEPLOYMENT.md`: Cloudflare update steps
 - `deployment/DEPLOYMENT.md`: Apps Script update and acceptance-test steps
 

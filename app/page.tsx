@@ -26,6 +26,7 @@ type Analysis = {
   evidenceImages: EvidenceImage[]; sourceLinks?: { label: string; url: string }[];
   uploadedImages?: UploadedImage[]; archiveFolderId?: string; reportUrl?: string; photosUrl?: string;
   researchTimings?: ResearchTiming[];
+  arvBasis?: Record<string, string>;
   status?: "draft" | "completed";
 };
 type ArchiveItem = { id: string; address: string; createdAt: string; arvLow?: number; arvHigh?: number };
@@ -47,6 +48,7 @@ const RECIPIENTS = [
 
 function money(value: number) { return value ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value) : "—"; }
 function elapsedTime(seconds: number) { return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`; }
+function factSnapshot(facts: Fact[]) { return Object.fromEntries(facts.map((fact) => [fact.key, fact.confirmedValue.trim()])); }
 function confidenceTone(value: Confidence) { return value === "High" ? "confidence-high" : value === "Moderate" ? "confidence-moderate" : "confidence-low"; }
 async function api(action: string, payload: Record<string, unknown> = {}) {
   if (!endpoint) throw new Error("Analysis service is not configured yet.");
@@ -193,6 +195,7 @@ export default function Home() {
         evidenceImages: completed.evidenceImages?.length ? completed.evidenceImages : researched.evidenceImages,
         sourceLinks: Array.from(new Map([...(researched.sourceLinks || []), ...(completed.sourceLinks || [])].map((link) => [link.url, link])).values()),
         uploadedImages: analysis.uploadedImages || [],
+        arvBasis: factSnapshot(researched.facts),
         researchTimings: [...(analysis.researchTimings || []), { operation: "initial", seconds: Math.max(1, Math.round((Date.now() - startedAt) / 1000)), completedAt }],
         status: "draft",
       };
@@ -204,7 +207,9 @@ export default function Home() {
   async function continueFromFacts() {
     setBusy(true); setMessage("");
     try {
-      const configurationChanged = analysis.facts.some((fact) => fact.confirmedValue.trim() !== fact.aiValue.trim());
+      const currentBasis = factSnapshot(analysis.facts);
+      const savedBasis = analysis.arvBasis || currentBasis;
+      const configurationChanged = Object.keys(currentBasis).some((key) => currentBasis[key] !== savedBasis[key]);
       if (!configurationChanged) {
         const saved = await persistDraft(analysis);
         setAnalysis(saved);
@@ -220,6 +225,7 @@ export default function Home() {
         arv: result.arv,
         updatedAt: result.updatedAt || new Date().toISOString(),
         sourceLinks: Array.from(new Map([...(analysis.sourceLinks || []), ...(result.sourceLinks || [])].map((link) => [link.url, link])).values()),
+        arvBasis: currentBasis,
         researchTimings: [...(analysis.researchTimings || []), { operation: "configuration", seconds: Math.max(1, Math.round((Date.now() - startedAt) / 1000)), completedAt: new Date().toISOString() }],
       };
       const saved = await persistDraft(revised);
@@ -278,7 +284,7 @@ export default function Home() {
     <main className="app-shell">
       <header className="app-header">
         <div className="brand-mark">W</div>
-        <div><p className="eyebrow">Wanderlust Intelligence Platform</p><h1>Stage 2 Analysis <span className="build-number">Build 8</span></h1></div>
+        <div><p className="eyebrow">Wanderlust Intelligence Platform</p><h1>Stage 2 Analysis <span className="build-number">Build 9</span></h1></div>
         <div className="header-actions"><Button variant="outline" onClick={openArchive}><FileArchive size={16} /> Open Previous</Button><Button variant="ghost" onClick={newAnalysis}>New Analysis</Button></div>
       </header>
       <section className="workspace">

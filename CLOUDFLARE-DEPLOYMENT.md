@@ -1,4 +1,4 @@
-# Wanderlust Stage 2 Analysis — Cloudflare Build 8
+# Wanderlust Stage 2 Analysis — Cloudflare Build 9
 
 This repository deploys the approved Stage 2 Analysis frontend as a Cloudflare
 Worker and keeps the Apps Script submission token on the server. Cloudflare
@@ -14,10 +14,10 @@ Do not put either value in source code or commit a populated `.env` file.
 
 ## GitHub and Cloudflare deployment
 
-1. Replace the existing repository source with the contents of the Build 8 source package.
+1. Replace the existing repository source with the contents of the Build 9 source package.
 2. Commit the change to the production branch connected to Cloudflare.
 3. Allow the existing `wanderlust-stage-two-analysis` Worker to build and deploy the commit.
-4. Confirm `https://stage2.wanderlust.properties` displays **Build 8**.
+4. Confirm `https://stage2.wanderlust.properties` displays **Build 9**.
 
 ## Environment variables
 

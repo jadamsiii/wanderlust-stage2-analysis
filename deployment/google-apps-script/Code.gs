@@ -1,5 +1,5 @@
 /**
- * Wanderlust Stage 2 Analysis Bridge — Build 8 — Autosave, Timing & Status
+ * Wanderlust Stage 2 Analysis Bridge — Build 9 — Stable Reopen & Archive Timestamps
  * Deploy as a Google Apps Script web app: execute as owner; access by anyone
  * permitted by the Wanderlust front-end deployment.
  *
@@ -11,7 +11,7 @@
  *   OPENAI_MODEL (defaults to gpt-5.6)
  */
 
-const APP_VERSION = '1.0.8';
+const APP_VERSION = '1.0.9';
 const DEFAULT_MODEL = 'gpt-5.6';
 const APPROVED_RECIPIENTS = [
   'john@wanderlust.properties',
@@ -572,7 +572,7 @@ function listAnalyses_() {
     if (!/\.json$/i.test(file.getName())) continue;
     try {
       const analysis = JSON.parse(file.getBlob().getDataAsString());
-      items.push({ id: file.getId(), address: analysis.address || file.getName(), createdAt: analysis.createdAt || file.getDateCreated().toISOString(), arvLow: analysis.arv && analysis.arv.lowTotal, arvHigh: analysis.arv && analysis.arv.highTotal });
+      items.push({ id: file.getId(), address: analysis.address || file.getName(), createdAt: archiveTimestamp_(analysis, file), arvLow: analysis.arv && analysis.arv.lowTotal, arvHigh: analysis.arv && analysis.arv.highTotal });
     } catch (ignore) {}
   }
   const folders = root.getFolders();
@@ -583,7 +583,7 @@ function listAnalyses_() {
     const file = matches.next();
     try {
       const analysis = JSON.parse(file.getBlob().getDataAsString());
-      items.push({ id: file.getId(), address: analysis.address || folder.getName(), createdAt: analysis.createdAt || file.getDateCreated().toISOString(), arvLow: analysis.arv && analysis.arv.lowTotal, arvHigh: analysis.arv && analysis.arv.highTotal });
+      items.push({ id: file.getId(), address: analysis.address || folder.getName(), createdAt: archiveTimestamp_(analysis, file), arvLow: analysis.arv && analysis.arv.lowTotal, arvHigh: analysis.arv && analysis.arv.highTotal });
     } catch (ignore) {}
   }
   items.sort(function(a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });
@@ -610,7 +610,7 @@ function buildReportHtml_(analysis, images, analysisFolder) {
     '</style></head><body>' +
     '<div class="brand">Wanderlust Properties · Stage 2 Analysis</div>' +
     '<h1>' + html_(analysis.address) + '</h1>' +
-    '<div class="meta">Prepared ' + html_(formatReportDate_(analysis.updatedAt || new Date().toISOString())) + ' · Build 8' + (analysis.ownership ? ' · ' + html_(analysis.ownership) : '') + '</div>' +
+    '<div class="meta">Prepared ' + html_(formatReportDate_(analysis.updatedAt || new Date().toISOString())) + ' · Build 9' + (analysis.ownership ? ' · ' + html_(analysis.ownership) : '') + '</div>' +
     '<div class="notice"><strong>Preliminary screening report.</strong> This Stage 2 analysis supports the decision to investigate or walk a property. It is not a final valuation or an offer recommendation.</div>' +
     '<h2>Confirmed Property Configuration</h2>' + reportTable_(facts.map(function(item) { return [item.label, item.confirmedValue || item.aiValue || '—']; }), ['Property fact', 'Confirmed value']) +
     '<h2>Preliminary ARV</h2><table class="metrics"><tr>' +
@@ -622,7 +622,7 @@ function buildReportHtml_(analysis, images, analysisFolder) {
     '<h2>Additional Stage 2 Findings</h2>' + reportGradeTable_(additional) +
     (propertyImages.length ? '<h2>Property Photo Evidence</h2><div class="photos">' + propertyImages.map(photoHtml_).join('') + '</div><p><a href="' + driveFolderUrl_(analysisFolder.getId()) + '">View the full-resolution property photo archive</a></p>' : '') +
     (sources.length ? '<h2>Research Sources</h2><div class="sources">' + sources.map(function(source) { return '<p><a href="' + attr_(source.url) + '">' + html_(source.label || source.url) + '</a></p>'; }).join('') + '</div>' : '') +
-    '<div class="footer">Wanderlust Properties · Stage 2 Analysis · Build 8</div></body></html>';
+    '<div class="footer">Wanderlust Properties · Stage 2 Analysis · Build 9</div></body></html>';
 }
 
 function reportTable_(rows, headers) {
@@ -699,6 +699,14 @@ function driveFileUrl_(id) { return 'https://drive.google.com/file/d/' + id + '/
 function driveFolderUrl_(id) { return 'https://drive.google.com/drive/folders/' + id; }
 function currency_(value) { const number = Number(value); return number ? '$' + Math.round(number).toLocaleString('en-US') : '—'; }
 function formatReportDate_(value) { return Utilities.formatDate(new Date(value), Session.getScriptTimeZone() || 'America/Chicago', 'MMMM d, yyyy h:mm a'); }
+function archiveTimestamp_(analysis, file) {
+  const values = [analysis && analysis.updatedAt, analysis && analysis.createdAt];
+  for (let i = 0; i < values.length; i++) {
+    const value = String(values[i] || '');
+    if (/T\d{2}:\d{2}/.test(value) && !isNaN(new Date(value).getTime())) return new Date(value).toISOString();
+  }
+  return file.getLastUpdated().toISOString();
+}
 function html_(value) { return String(value === undefined || value === null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 function attr_(value) { return html_(value); }
 

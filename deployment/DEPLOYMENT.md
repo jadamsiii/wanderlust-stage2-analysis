@@ -6,7 +6,7 @@ Inside the authoritative Properties folder, use the existing Reports folder. The
 
 `Properties / Reports / Stage 2 Analysis Archive`
 
-Build 8 automatically maintains a draft JSON record in Drive while an analysis progresses, then converts the same folder into the dated completed archive containing the PDF report, uploaded originals, and compact report thumbnails. Existing Build 6 and Build 7 JSON records remain readable.
+Build 9 automatically maintains a draft JSON record in Drive while an analysis progresses, reopens a saved ARV without unnecessary research unless configuration changes, and uses actual saved timestamps in the archive. Existing Build 6 through Build 8 JSON records remain readable.
 
 ## Google Apps Script
 
