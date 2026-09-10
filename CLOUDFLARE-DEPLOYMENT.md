@@ -1,4 +1,4 @@
-# Wanderlust Stage 2 Analysis — Cloudflare Build 6
+# Wanderlust Stage 2 Analysis — Cloudflare Build 7
 
 This repository deploys the approved Stage 2 Analysis frontend as a Cloudflare
 Worker and keeps the Apps Script submission token on the server. Cloudflare
@@ -14,14 +14,10 @@ Do not put either value in source code or commit a populated `.env` file.
 
 ## GitHub and Cloudflare deployment
 
-1. Create a new private GitHub repository named `wanderlust-stage-two-analysis`.
-2. Upload every file and folder from this package to the repository root.
-3. In Cloudflare, open **Workers & Pages** and select **Create application**.
-4. Select **Get started** beside **Import a repository**.
-5. Choose the new GitHub repository.
-6. Keep the Worker name exactly `wanderlust-stage-two-analysis`.
-7. Use `npm ci` as the build command and `npm run deploy` as the deploy command if Cloudflare asks for them.
-8. Save and deploy. Confirm the generated `workers.dev` URL opens Build 6 before adding the custom domain.
+1. Replace the existing repository source with the contents of the Build 7 source package.
+2. Commit the change to the production branch connected to Cloudflare.
+3. Allow the existing `wanderlust-stage-two-analysis` Worker to build and deploy the commit.
+4. Confirm `https://stage2.wanderlust.properties` displays **Build 7**.
 
 ## Environment variables
 
@@ -29,7 +25,7 @@ In the Worker, open **Settings > Variables and Secrets**:
 
 1. Add `STAGE2_API_URL` as plain text using the existing Apps Script `/exec` URL.
 2. Add `STAGE2_SUBMISSION_TOKEN` as an encrypted secret using the current Apps Script token.
-3. Deploy the current version again so the bindings are active.
+3. No variable changes are required when these values are already present.
 
 ## Custom domain
 
