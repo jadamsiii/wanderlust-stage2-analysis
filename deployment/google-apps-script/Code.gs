@@ -1,5 +1,5 @@
 /**
- * Wanderlust Stage 2 Analysis Bridge — Build 7 — PDF Delivery & Photo Archive
+ * Wanderlust Stage 2 Analysis Bridge — Build 8 — Autosave, Timing & Status
  * Deploy as a Google Apps Script web app: execute as owner; access by anyone
  * permitted by the Wanderlust front-end deployment.
  *
@@ -11,7 +11,7 @@
  *   OPENAI_MODEL (defaults to gpt-5.6)
  */
 
-const APP_VERSION = '1.0.7';
+const APP_VERSION = '1.0.8';
 const DEFAULT_MODEL = 'gpt-5.6';
 const APPROVED_RECIPIENTS = [
   'john@wanderlust.properties',
@@ -36,6 +36,7 @@ function doPost(e) {
       case 'recalculate': return json_({ ok: true, analysis: recalculate_(request.analysis) });
       case 'analyzeImages': return json_({ ok: true, analysis: analyzeImages_(request.analysis, request.images || []) });
       case 'uploadImage': return json_({ ok: true, image: uploadImage_(request) });
+      case 'saveDraft': return json_(saveDraft_(request));
       case 'saveAndDeliver': return json_(saveAndDeliver_(request));
       case 'save': return json_({ ok: true, id: saveAnalysis_(request.analysis) });
       case 'list': return json_({ ok: true, items: listAnalyses_() });
@@ -453,7 +454,7 @@ function developerPrompt_() {
 
 function saveAnalysis_(analysis) {
   if (!analysis || !analysis.address) throw new Error('Completed analysis is missing.');
-  const folder = resolveAnalysisFolder_(analysis, analysis.uploadedImages || []);
+  const folder = resolveAnalysisFolder_(analysis, analysis.uploadedImages || [], '');
   const now = new Date();
   const stamp = Utilities.formatDate(now, Session.getScriptTimeZone() || 'America/Chicago', 'yyyy-MM-dd HHmmss');
   const safeAddress = analysis.address.replace(/[^a-zA-Z0-9 -]/g, '').replace(/\s+/g, ' ').trim();
@@ -463,10 +464,27 @@ function saveAnalysis_(analysis) {
   analysis.appVersion = APP_VERSION;
   analysis.archiveFolderId = folder.getId();
   folder.setName('Stage 2 — ' + safeAddress + ' — ' + stamp);
-  const file = replaceFile_(folder, 'Stage 2 Analysis.json', JSON.stringify(analysis, null, 2), MimeType.PLAIN_TEXT);
+  const file = upsertTextFile_(folder, 'Stage 2 Analysis.json', JSON.stringify(analysis, null, 2));
   analysis.id = file.getId();
   file.setContent(JSON.stringify(analysis, null, 2));
   return file.getId();
+}
+
+function saveDraft_(request) {
+  const analysis = request.analysis;
+  if (!analysis || !analysis.address) throw new Error('Analysis draft is missing its property address.');
+  const images = Array.isArray(analysis.uploadedImages) ? analysis.uploadedImages : [];
+  const folder = resolveAnalysisFolder_(analysis, images, request.draftId || '');
+  const now = new Date();
+  analysis.createdAt = analysis.createdAt || now.toISOString();
+  analysis.updatedAt = now.toISOString();
+  analysis.status = 'draft';
+  analysis.appVersion = APP_VERSION;
+  analysis.archiveFolderId = folder.getId();
+  const file = upsertTextFile_(folder, 'Stage 2 Analysis.json', JSON.stringify(analysis, null, 2));
+  analysis.id = file.getId();
+  file.setContent(JSON.stringify(analysis, null, 2));
+  return { ok: true, id: file.getId(), folderId: folder.getId(), savedAt: analysis.updatedAt };
 }
 
 function uploadImage_(request) {
@@ -502,7 +520,7 @@ function saveAndDeliver_(request) {
   const sendEmail = request.sendEmail === true;
   const recipients = validatedRecipients_(request.recipients || [], request.customEmail || '', sendEmail);
   const images = Array.isArray(analysis.uploadedImages) ? analysis.uploadedImages : [];
-  const folder = resolveAnalysisFolder_(analysis, images);
+  const folder = resolveAnalysisFolder_(analysis, images, request.draftId || '');
   const now = new Date();
   const stamp = Utilities.formatDate(now, Session.getScriptTimeZone() || 'America/Chicago', 'yyyy-MM-dd HHmmss');
   const safeAddress = safeFileName_(analysis.address).replace(/\.[^.]+$/, '');
@@ -592,7 +610,7 @@ function buildReportHtml_(analysis, images, analysisFolder) {
     '</style></head><body>' +
     '<div class="brand">Wanderlust Properties · Stage 2 Analysis</div>' +
     '<h1>' + html_(analysis.address) + '</h1>' +
-    '<div class="meta">Prepared ' + html_(formatReportDate_(analysis.updatedAt || new Date().toISOString())) + ' · Build 7' + (analysis.ownership ? ' · ' + html_(analysis.ownership) : '') + '</div>' +
+    '<div class="meta">Prepared ' + html_(formatReportDate_(analysis.updatedAt || new Date().toISOString())) + ' · Build 8' + (analysis.ownership ? ' · ' + html_(analysis.ownership) : '') + '</div>' +
     '<div class="notice"><strong>Preliminary screening report.</strong> This Stage 2 analysis supports the decision to investigate or walk a property. It is not a final valuation or an offer recommendation.</div>' +
     '<h2>Confirmed Property Configuration</h2>' + reportTable_(facts.map(function(item) { return [item.label, item.confirmedValue || item.aiValue || '—']; }), ['Property fact', 'Confirmed value']) +
     '<h2>Preliminary ARV</h2><table class="metrics"><tr>' +
@@ -604,7 +622,7 @@ function buildReportHtml_(analysis, images, analysisFolder) {
     '<h2>Additional Stage 2 Findings</h2>' + reportGradeTable_(additional) +
     (propertyImages.length ? '<h2>Property Photo Evidence</h2><div class="photos">' + propertyImages.map(photoHtml_).join('') + '</div><p><a href="' + driveFolderUrl_(analysisFolder.getId()) + '">View the full-resolution property photo archive</a></p>' : '') +
     (sources.length ? '<h2>Research Sources</h2><div class="sources">' + sources.map(function(source) { return '<p><a href="' + attr_(source.url) + '">' + html_(source.label || source.url) + '</a></p>'; }).join('') + '</div>' : '') +
-    '<div class="footer">Wanderlust Properties · Stage 2 Analysis · Build 7</div></body></html>';
+    '<div class="footer">Wanderlust Properties · Stage 2 Analysis · Build 8</div></body></html>';
 }
 
 function reportTable_(rows, headers) {
@@ -650,14 +668,14 @@ function validatedRecipients_(selected, customEmail, required) {
   return recipients;
 }
 
-function resolveAnalysisFolder_(analysis, images) {
+function resolveAnalysisFolder_(analysis, images, draftId) {
   const root = archiveFolder_();
   const candidateId = analysis.archiveFolderId || (images[0] && images[0].folderId);
   if (candidateId) {
     const candidate = DriveApp.getFolderById(candidateId);
     if (folderIsChildOf_(candidate, root.getId())) return candidate;
   }
-  return root.createFolder('Stage 2 Draft — ' + Utilities.getUuid());
+  return draftId ? findOrCreateDraftFolder_(draftId) : root.createFolder('Stage 2 Draft — ' + Utilities.getUuid());
 }
 
 function findOrCreateDraftFolder_(draftId) {
@@ -671,6 +689,7 @@ function childFolder_(parent, name) { const matches = parent.getFoldersByName(na
 function folderIsChildOf_(folder, parentId) { const parents = folder.getParents(); while (parents.hasNext()) if (parents.next().getId() === parentId) return true; return false; }
 function fileIsInArchive_(file) { const rootId = archiveFolder_().getId(); const parents = file.getParents(); while (parents.hasNext()) { const parent = parents.next(); if (parent.getId() === rootId || folderIsChildOf_(parent, rootId)) return true; } return false; }
 function replaceFile_(folder, name, content, mimeType) { trashNamedFiles_(folder, name); return folder.createFile(name, content, mimeType); }
+function upsertTextFile_(folder, name, content) { const files = folder.getFilesByName(name); if (files.hasNext()) { const file = files.next(); file.setContent(content); return file; } return folder.createFile(name, content, MimeType.PLAIN_TEXT); }
 function replaceBlobFile_(folder, name, blob) { trashNamedFiles_(folder, name); blob.setName(name); return folder.createFile(blob); }
 function trashNamedFiles_(folder, name) { const files = folder.getFilesByName(name); while (files.hasNext()) files.next().setTrashed(true); }
 function uniqueFileName_(folder, name) { if (!folder.getFilesByName(name).hasNext()) return name; const dot = name.lastIndexOf('.'); return (dot > 0 ? name.slice(0, dot) : name) + ' — ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'America/Chicago', 'HHmmss') + (dot > 0 ? name.slice(dot) : ''); }
