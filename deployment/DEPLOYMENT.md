@@ -6,7 +6,7 @@ Inside the authoritative Properties folder, use the existing Reports folder. The
 
 `Properties / Reports / Stage 2 Analysis Archive`
 
-Build 9 automatically maintains a draft JSON record in Drive while an analysis progresses, reopens a saved ARV without unnecessary research unless configuration changes, and uses actual saved timestamps in the archive. Existing Build 6 through Build 8 JSON records remain readable.
+Build 10 adds On Market Status above Preliminary ARV while preserving automatic Drive drafts, stable reopen behavior, and actual saved archive timestamps. Existing Build 6 through Build 9 JSON records remain readable; records without `currentListing` safely display an unverified status until fresh research is run.
 
 ## Google Apps Script
 

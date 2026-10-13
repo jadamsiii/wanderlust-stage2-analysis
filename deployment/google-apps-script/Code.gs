@@ -1,5 +1,5 @@
 /**
- * Wanderlust Stage 2 Analysis Bridge — Build 9 — Stable Reopen & Archive Timestamps
+ * Wanderlust Stage 2 Analysis Bridge — Build 10 — Current Listing Reference
  * Deploy as a Google Apps Script web app: execute as owner; access by anyone
  * permitted by the Wanderlust front-end deployment.
  *
@@ -11,7 +11,7 @@
  *   OPENAI_MODEL (defaults to gpt-5.6)
  */
 
-const APP_VERSION = '1.0.9';
+const APP_VERSION = '1.0.10';
 const DEFAULT_MODEL = 'gpt-5.6';
 const APPROVED_RECIPIENTS = [
   'john@wanderlust.properties',
@@ -91,7 +91,7 @@ function completeGradesPrompt_(analysis) {
   return [
     'Complete the non-ARV portions of this preliminary Stage 2 analysis for ' + analysis.address + '.',
     'This is a focused second pass. Perform fresh targeted web research for every construction, intangible, and additional field. Inspect every attached subject-property image. Use the prior facts, source links, listing descriptions, and ownership note as supporting evidence.',
-    'Return the complete required JSON schema and preserve the prior address, ownership, facts, and ARV exactly.',
+    'Return the complete required JSON schema and preserve the prior address, ownership, facts, ARV, and currentListing exactly.',
     'For construction and visual intangibles, make the best supportable recommendation from subject photos and descriptions. Use Low confidence for dated, partial, or indirect evidence. Use Unknown only if neither images nor researched descriptions support a responsible entry.',
     'For nonvisual intangibles, compare the confirmed existing configuration with the ordinary local buyer pool. Do not grade protected characteristics or demographics.',
     'For Additional Stage 2 fields, conduct a distinct search for each field. Google Search is Passed unless a material adverse result is found. Research vacancy or occupancy signals, sewer or septic, road classification, USDA eligibility, and FEMA or authoritative flood risk. Use a concise reason and confidence for each.',
@@ -116,7 +116,8 @@ function recalculatePrompt_(analysis) {
     'Do fresh web research. Produce a balanced, market-supported preliminary range; do not discount the value merely because this is Stage 2. Do not assume additions, conversions, added bedrooms/bathrooms, added square footage, or other post-walk value creation.',
     'Value the confirmed existing configuration after a competent, market-appropriate restoration. Use relevant ordinary restored sold properties as the primary range evidence. Use active listings and materially superior, waterfront, acreage, newer, or income-producing properties only to test a credible street or neighborhood ceiling.',
     'The low value is the defensible restored-value floor supported by relevant ordinary comps. The high value is the supported upper end for the same ordinary restored configuration. ARV Ceiling is a downward location cap: it must equal the high ARV when no lower neighborhood cap is supported, or be lower when the street or neighborhood limits value. It must never exceed the high ARV total.',
-    'Return the complete analysis JSON schema. Only the ARV and supporting source links will be applied by the app; all prior grading and evidence are preserved deterministically.',
+    'Also verify whether the subject is currently offered for sale. If it is actively listed, return the current asking price and best direct listing source in currentListing. This is reference-only and must not influence the ARV range. If listing sites materially disagree, use the most recently verified price and set conflict=true.',
+    'Return the complete analysis JSON schema. Only the ARV, currentListing, and supporting source links will be applied by the app; all prior grading and evidence are preserved deterministically.',
     'Address: ' + analysis.address,
     'Confirmed facts: ' + JSON.stringify(facts),
     'Prior analysis: ' + JSON.stringify(analysis)
@@ -310,6 +311,7 @@ function normalizeAnalysis_(analysis, address, ownership) {
   analysis.sourceLinks = Array.isArray(analysis.sourceLinks) ? analysis.sourceLinks : [];
   analysis.facts = normalizeFacts_(analysis.facts);
   analysis.arv = normalizeArv_(analysis.arv);
+  analysis.currentListing = normalizeCurrentListing_(analysis.currentListing);
   analysis.construction = normalizeGradeRows_(analysis.construction, [
     { label: 'Base', value: '2.5', reason: 'Standard Stage 2 rehabilitation base.' },
     { label: 'Premium', value: 'Unknown' },
@@ -339,6 +341,22 @@ function normalizeAnalysis_(analysis, address, ownership) {
   const constructionSum = knownConstruction.reduce(function(sum, row) { return sum + Number(row.value); }, 0);
   analysis.constructionTotal = String(constructionSum);
   analysis.constructionConfidence = normalizeConfidence_(analysis.constructionConfidence);
+}
+
+function normalizeCurrentListing_(listing) {
+  listing = listing || {};
+  const rawStatus = String(listing.status || '').toLowerCase();
+  const status = rawStatus === 'on market' || rawStatus === 'active' || rawStatus === 'listed'
+    ? 'On Market'
+    : (rawStatus === 'not listed' || rawStatus === 'off market' ? 'Not Listed' : 'Unknown');
+  return {
+    status: status,
+    price: status === 'On Market' ? (Number(listing.price) || 0) : 0,
+    source: status === 'On Market' ? String(listing.source || 'Unknown') : '',
+    url: status === 'On Market' ? String(listing.url || '') : '',
+    verifiedAt: status === 'On Market' ? String(listing.verifiedAt || new Date().toISOString()) : '',
+    conflict: status === 'On Market' && Boolean(listing.conflict)
+  };
 }
 
 function normalizeFacts_(facts) {
@@ -428,6 +446,7 @@ function initialPrompt_(address, ownership) {
     'Run a preliminary Stage 2 property analysis for: ' + address,
     ownership ? 'User-supplied ownership/acquisition note: ' + ownership : 'Ownership/acquisition type was not supplied.',
     'Research public property facts, current and archived listing information, relevant sold and active properties, street-level or listing imagery when accessible, flood information, USDA eligibility, road type, utilities, and occupancy signals.',
+    'Determine whether the subject is actively listed for sale. Search Zillow, Realtor.com, Trulia, Redfin, and other credible current listing sources when accessible. If on market, return the current asking price, the best direct source name and URL, the verification timestamp, and whether material price conflicts exist across sources. Prefer a direct active listing page and the most recently verified price. This list price is reference-only and must not influence the ARV calculation.',
     'This is a five-to-ten-minute pre-walk opportunity screen. Its purpose is to decide whether the property has enough plausible restored-value upside to justify investing approximately one to one-and-a-half hours in a physical walk. It is not an appraisal, a final ARV, or an offer-construction tool; those belong in Stage 4. Favor preserving a plausible acquisition opportunity over presenting false precision because an unnecessary walk is less costly than incorrectly rejecting a viable property. Evaluate a balanced, market-supported ARV range for the property’s EXISTING publicly supported configuration after a competent, market-appropriate restoration. Do not reduce the estimate merely because this is Stage 2. Do not assume additions, room conversions, added bedrooms or bathrooms, added square footage, or other value creation that would require a property walk.',
     'If sources disagree, mark the affected fact conflict=true, show a concise combined AI finding, and choose a conservative confirmedValue for the user to edit against Master Suite.',
     'For ARV, use relevant ordinary restored sold properties as primary evidence. The low and high values must describe the probable market-supported range for the same existing configuration after competent restoration. Do not use an as-is sale, assessed value, AVM, or one unusually low comp as the restored-value floor. When exact comps are scarce, use the broader cluster of the best ordinary restored evidence and express that uncertainty by widening the range toward the plausible high side rather than shifting the entire range downward. Use a minimum spread of $20 per square foot for High or Moderate confidence and $30 per square foot for Low confidence. Treat waterfront, lake-view, acreage, newer construction, superior amenities, and income-producing properties only as secondary evidence when the subject lacks those traits. ARV Ceiling is only a downward street or neighborhood cap: it must equal the high ARV when no lower cap is supported, or be lower than the high ARV when a location cap applies. It must never exceed highTotal. Do not average AVMs. Return rounded whole-dollar per-square-foot values and matching totals.',
@@ -440,9 +459,10 @@ function developerPrompt_() {
   return [
     'You are the Wanderlust Properties Stage 2 Analysis engine for Hot Springs, Arkansas acquisition screening.',
     'Return one valid JSON object and no prose outside it. No methodology narrative belongs in the user interface.',
-    'Required top-level keys: address, ownership, createdAt, updatedAt, facts, arv, construction, constructionTotal, constructionConfidence, intangibles, additional, evidenceImages, sourceLinks, status.',
+    'Required top-level keys: address, ownership, createdAt, updatedAt, facts, arv, currentListing, construction, constructionTotal, constructionConfidence, intangibles, additional, evidenceImages, sourceLinks, status.',
     'facts is an array of exactly these keys and labels: propertyType/Property type, bedrooms/Bedrooms, fullBaths/Full bathrooms, halfBaths/Half bathrooms, squareFeet/Living area, lotSize/Lot size, stories/Stories, basement/Basement, parking/Garage / carport, waterfront/Waterfront / access. Each item: {key,label,aiValue,confirmedValue,conflict,sources}. Every confirmedValue must be a non-empty string; use Unknown if necessary.',
     'arv: {lowPsf,lowTotal,highPsf,highTotal,ceiling,ceilingReason,confidence}. confidence must be High, Moderate, Low, or Unknown. Default ceiling to highTotal and return ceilingReason as an empty string. Only return a ceiling below highTotal when specific street or neighborhood market evidence demonstrates that the otherwise supported restored comp range cannot be achieved at the subject; in that exceptional case, ceilingReason must state the concrete evidence in one concise sentence. Never lower the ceiling merely because comps are scarce, confidence is Low or Moderate, the subject needs renovation, or the range is broad.',
+    'currentListing: {status,price,source,url,verifiedAt,conflict}. status must be On Market, Not Listed, or Unknown. For On Market, price is the current asking price as a number, source is the listing site name, url is the direct supporting page when available, verifiedAt is an ISO timestamp, and conflict is true only when credible current sources materially disagree. For Not Listed or Unknown, price must be 0 and source/url may be empty. Never use the subject list price as ARV evidence or allow it to change the ARV range.',
     'construction must contain Base, Premium, Siding, Windows, Roof, Exterior. Each: {label,value,confidence,reason,images}. Base is always 2.5. Premium is 0 ordinary, .5 foreclosure, 1 tax sale. Siding 0 serviceable, .5 paint, 1 replacement. Windows 0 serviceable, .5 replacement. Roof 0 no visible need, .5 replacement, 1 complicated roofline or probable decking. Exterior 0 no material neglect, .5 unkept yard, 1 unkept plus trash, 1.5 severe neglect. constructionTotal is the numeric sum as a string. Reasons must be one short sentence. Images contain only verified direct image URLs with source/date/label.',
     'intangibles must contain Comp Risk, Basement, Beds / Baths, Curb Appeal, Neighbors, Parking, Yard. Values are only Positive, Neutral, Negative, or Unknown. Every entry must include a concise one-sentence reason explaining the property evidence and market logic behind the suggested grade so the user can decide whether to override it later in Master Suite. Confidence is required. For Beds / Baths, state whether the existing count and primary-suite functionality are typical or deficient for the likely restored market. For Parking, evaluate both formal covered parking and the practical amount of usable on-site parking; do not assign Negative solely because a garage is absent when the lot provides adequate usable parking. For Yard, distinguish current visible condition from size, usability, and improvement potential when those are publicly observable. Neighbors means visible property condition and market compatibility only, never people or demographics.',
     'additional must contain Google Search, Vacant, Septic, Road Type, USDA, Flood Risk. Each has value, confidence, and one short reason. Google Search should be Passed unless research finds a material adverse issue, then Failed; do not use Unknown merely because no adverse result appears. Vacant should state Vacant or Occupied when supported. Septic should state Septic or Public Sewer when supported. Road Type should state the supported road/utility classification. USDA should state Qualified or Not Qualified when an authoritative eligibility result supports it. Flood Risk should state the supported risk level. Use Unknown only when reasonable research cannot support a responsible suggestion.',
@@ -605,14 +625,17 @@ function buildReportHtml_(analysis, images, analysisFolder) {
   const propertyImages = images.filter(function(image) { return image && image.kind === 'property'; });
   const sources = Array.isArray(analysis.sourceLinks) ? analysis.sourceLinks : [];
   const arv = analysis.arv || {};
+  const listing = analysis.currentListing || {};
   return '<!doctype html><html><head><meta charset="utf-8"><style>' +
     '@page{size:letter;margin:.48in}body{font-family:Arial,sans-serif;color:#17222d;font-size:10pt;line-height:1.35}h1{font-family:Georgia,serif;color:#173c31;font-size:24pt;margin:0 0 4px}h2{font-family:Georgia,serif;color:#173c31;font-size:15pt;margin:20px 0 8px;border-bottom:2px solid #d4ab63;padding-bottom:4px}.brand{color:#9c6c25;font-size:8pt;font-weight:bold;letter-spacing:1.8px;text-transform:uppercase}.meta{color:#66727f;margin-bottom:16px}.notice{background:#edf6f0;border-left:4px solid #2e6b50;padding:9px 11px;margin:12px 0}.metrics{width:100%;border-collapse:separate;border-spacing:6px}.metrics td{border:1px solid #d7dfdc;border-radius:6px;padding:10px}.metrics span{display:block;color:#657181;font-size:8pt}.metrics strong{display:block;font-size:16pt;margin-top:3px}.data{width:100%;border-collapse:collapse}.data th{background:#edf1ef;color:#42515d;text-align:left;font-size:8pt;text-transform:uppercase;letter-spacing:.5px}.data th,.data td{border:1px solid #d7dfdc;padding:6px;vertical-align:top}.photos{display:flex;flex-wrap:wrap;gap:9px}.photo{width:31%;page-break-inside:avoid}.photo img{width:100%;height:115px;object-fit:cover;border:1px solid #d7dfdc}.photo a{display:block;color:#215a45;font-size:8pt;margin-top:3px;text-decoration:none}.sources{font-size:8pt;word-break:break-all}.footer{margin-top:20px;border-top:1px solid #d7dfdc;padding-top:7px;color:#6b7580;font-size:8pt}' +
     '</style></head><body>' +
     '<div class="brand">Wanderlust Properties · Stage 2 Analysis</div>' +
     '<h1>' + html_(analysis.address) + '</h1>' +
-    '<div class="meta">Prepared ' + html_(formatReportDate_(analysis.updatedAt || new Date().toISOString())) + ' · Build 9' + (analysis.ownership ? ' · ' + html_(analysis.ownership) : '') + '</div>' +
+    '<div class="meta">Prepared ' + html_(formatReportDate_(analysis.updatedAt || new Date().toISOString())) + ' · Build 10' + (analysis.ownership ? ' · ' + html_(analysis.ownership) : '') + '</div>' +
     '<div class="notice"><strong>Preliminary screening report.</strong> This Stage 2 analysis supports the decision to investigate or walk a property. It is not a final valuation or an offer recommendation.</div>' +
     '<h2>Confirmed Property Configuration</h2>' + reportTable_(facts.map(function(item) { return [item.label, item.confirmedValue || item.aiValue || '—']; }), ['Property fact', 'Confirmed value']) +
+    '<h2>On Market Status</h2>' +
+    (listing.status === 'On Market' && Number(listing.price) > 0 ? '<p><strong>Current list price:</strong> ' + currency_(listing.price) + ' · Source: ' + (listing.url ? '<a href="' + attr_(listing.url) + '">' + html_(listing.source || 'Listing source') + '</a>' : html_(listing.source || 'Unknown')) + (listing.verifiedAt ? ' · Verified ' + html_(formatReportDate_(listing.verifiedAt)) : '') + (listing.conflict ? ' · Conflicting prices found across listing sites' : '') + '</p>' : '<p><strong>' + (listing.status === 'Unknown' ? 'Listing Status Could Not Be Verified' : 'Not Currently Listed For Sale') + '</strong></p>') +
     '<h2>Preliminary ARV</h2><table class="metrics"><tr>' +
       metricHtml_('Low ARV / sq. ft.', currency_(arv.lowPsf)) + metricHtml_('Low ARV total', currency_(arv.lowTotal)) + metricHtml_('High ARV / sq. ft.', currency_(arv.highPsf)) +
       '</tr><tr>' + metricHtml_('High ARV total', currency_(arv.highTotal)) + metricHtml_('ARV Ceiling', currency_(arv.ceiling)) + metricHtml_('Confidence', arv.confidence || 'Unknown') + '</tr></table>' +
@@ -622,7 +645,7 @@ function buildReportHtml_(analysis, images, analysisFolder) {
     '<h2>Additional Stage 2 Findings</h2>' + reportGradeTable_(additional) +
     (propertyImages.length ? '<h2>Property Photo Evidence</h2><div class="photos">' + propertyImages.map(photoHtml_).join('') + '</div><p><a href="' + driveFolderUrl_(analysisFolder.getId()) + '">View the full-resolution property photo archive</a></p>' : '') +
     (sources.length ? '<h2>Research Sources</h2><div class="sources">' + sources.map(function(source) { return '<p><a href="' + attr_(source.url) + '">' + html_(source.label || source.url) + '</a></p>'; }).join('') + '</div>' : '') +
-    '<div class="footer">Wanderlust Properties · Stage 2 Analysis · Build 9</div></body></html>';
+    '<div class="footer">Wanderlust Properties · Stage 2 Analysis · Build 10</div></body></html>';
 }
 
 function reportTable_(rows, headers) {
